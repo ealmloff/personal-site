@@ -11,6 +11,23 @@ fn main() {
 fn app(cx: Scope) -> Element {
     cx.render(rsx! {
         // Header{}
+        div{
+            display: "flex",
+            flex_direction: "row",
+            justify_content: "right",
+            a {
+                href: "https://www.linkedin.com/in/evan-almloff-571467213/",
+                img {
+                    src: "./In-Blue-34.png"
+                }
+            }
+            a {
+                href: "https://github.com/Demonthos",
+                img {
+                    src: "./In-Blue-34.png"
+                }
+            }
+        }
         Body{}
     })
 }
