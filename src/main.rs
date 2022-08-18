@@ -16,15 +16,21 @@ fn app(cx: Scope) -> Element {
             flex_direction: "row",
             justify_content: "right",
             a {
+                margin: "10px",
                 href: "https://www.linkedin.com/in/evan-almloff-571467213/",
                 img {
-                    src: "./In-Blue-34.png"
+                    src: "./In-Blue-34.png",
+                    width: "32px",
+                    height: "32px",
                 }
             }
             a {
+                margin: "10px",
                 href: "https://github.com/Demonthos",
                 img {
-                    src: "./In-Blue-34.png"
+                    src: "./GitHub-Mark-Light-32px.png",
+                    width: "32px",
+                    height: "32px",
                 }
             }
         }
