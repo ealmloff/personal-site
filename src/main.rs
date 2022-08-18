@@ -51,6 +51,46 @@ fn Body(cx: Scope) -> Element {
                 "I'm a computer science student in Overland Park, KS."
             }
             Projects{}
+            Card{
+                image: "linear-gradient(115deg, #1982c4, #6a4c93)",
+                h2 {
+                    "I'm interested in: "
+                }
+                ul {
+                    li {
+                        "The future of web development with WASM"
+                    }
+                    li {
+                        "Embedded Systems"
+                    }
+                    li {
+                        "Incremental Computation"
+                    }
+                    li {
+                        "Natural Language Processing"
+                    }
+                }
+            }
+            Card{
+                image: "linear-gradient(115deg, #ffca3a, #1982c4)",
+                h2 {
+                    "Languages I've worked with: "
+                }
+                ul {
+                    li {
+                        "🦀 Rust"
+                    }
+                    li {
+                        "🐍 Python"
+                    }
+                    li {
+                        "⚙️ C++"
+                    }
+                    li {
+                        "☕ Java"
+                    }
+                }
+            }
         }
     })
 }
