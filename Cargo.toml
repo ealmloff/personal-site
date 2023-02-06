@@ -7,8 +7,14 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-dioxus-web = { git = "https://github.com/dioxuslabs/dioxus" }
-dioxus = { git = "https://github.com/dioxuslabs/dioxus" }
+# dioxus-web = { git = "https://github.com/dioxuslabs/dioxus" }
+# dioxus = { git = "https://github.com/dioxuslabs/dioxus" }
+dioxus-web = { path = "c:/users/desktop/github/dioxus/packages/web" }
+dioxus = { path = "c:/users/desktop/github/dioxus/packages/dioxus" }
+reqwest = { version = "0.11.14", features = ["json"] }
+serde = { version = "1.0", features = ["derive"] }
+chrono = { version = "0.4.23", features = ["serde"] }
+futures-util = "0.3.26"
 
 [profile.release]
 opt-level = "z"

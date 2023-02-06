@@ -1,8 +1,91 @@
 #![allow(non_snake_case)]
 
-use std::cell::Cell;
+use futures_util::stream::StreamExt;
 
+use std::{
+    borrow::Borrow,
+    cell::{Cell, RefCell, RefMut},
+    char::MAX,
+    collections::HashMap,
+};
+
+use chrono::{DateTime, Utc};
 use dioxus::prelude::*;
+use reqwest::header::AUTHORIZATION;
+use serde::Deserialize;
+
+#[derive(Deserialize, Debug)]
+struct User {
+    avatar_url: String,        // https://avatars.githubusercontent.com/u/66571940?v=4
+    organizations_url: String, // https://api.github.com/users/Demonthos/orgs
+    repos_url: String,         // https://api.github.com/users/Demonthos/repos
+    events_url: String,        // https://api.github.com/users/Demonthos/events
+    name: String,              // ealmloff
+    company: Option<String>,   // null
+    blog: Option<String>,      // evanalmloff.me
+    location: Option<String>,  // kansas city
+    twitter_username: Option<String>, // null
+    public_repos: u32,         // 36
+    public_gists: u32,         // 0
+    followers: u32,            // 23
+    following: u32,            // 7
+    created_at: DateTime<Utc>, // 2020-06-07T20:12:47Z
+    updated_at: DateTime<Utc>, // 2023-01-28T13:29:59Z
+}
+
+#[derive(Deserialize, Debug)]
+struct Repo {
+    full_name: String,
+    name: String,
+    description: Option<String>,
+    fork: bool,
+    archived: bool,
+    stargazers_count: u32,
+    watchers_count: u32,
+    homepage: Option<String>,
+    html_url: String,
+    created_at: DateTime<Utc>,
+    updated_at: DateTime<Utc>,
+    contributors_url: String,
+}
+
+#[derive(Debug)]
+struct RepoData {
+    repo: Repo,
+    prs: Option<SearchResult>,
+    contributor: Contributor,
+}
+
+#[derive(Deserialize, Debug)]
+struct Pr {
+    html_url: String,
+    draft: bool,
+    title: String,
+    state: String,
+    body: Option<String>,
+    created_at: DateTime<Utc>,
+    updated_at: DateTime<Utc>,
+}
+
+#[derive(Deserialize, Debug)]
+struct SearchResult {
+    total_count: u32,
+    incomplete_results: bool,
+    items: Vec<Pr>,
+}
+
+#[derive(Deserialize, Debug)]
+struct Organization {
+    login: String,
+    description: Option<String>,
+    repos_url: String,
+}
+
+#[derive(Deserialize, Debug)]
+struct Contributor {
+    login: String,
+    contributions: u32,
+}
 
 fn main() {
     dioxus_web::launch(app);
@@ -10,476 +93,351 @@ fn main() {
 
 fn app(cx: Scope) -> Element {
     cx.render(rsx! {
-        // Header{}
-        div{
-            display: "flex",
-            flex_direction: "row",
-            justify_content: "right",
-            a {
-                margin: "10px",
-                href: "https://www.linkedin.com/in/evan-almloff-571467213/",
-                img {
-                    src: "./In-Blue-34.png",
-                    width: "32px",
-                    height: "32px",
-                }
-            }
-            a {
-                margin: "10px",
-                href: "https://github.com/Demonthos",
-                img {
-                    src: "./GitHub-Mark-Light-32px.png",
-                    width: "32px",
-                    height: "32px",
-                }
-            }
+        div { display: "flex", flex_direction: "row", justify_content: "right",
+            a { margin: "10px", href: "https://www.linkedin.com/in/evan-almloff-571467213/", img { src: "./In-Blue-34.png", width: "32px", height: "32px" } }
+            a { margin: "10px", href: "https://github.com/Demonthos", img { src: "./GitHub-Mark-Light-32px.png", width: "32px", height: "32px" } }
         }
-        Body{}
+        Body {}
     })
 }
 
 fn Body(cx: Scope) -> Element {
-    cx.render(rsx! {
-        div {
-            display: "flex",
-            flex_direction: "column",
-            align_items: "center",
-            h1 {
-                "Hi, I'm Evan!"
+    let repos: &UseRef<Vec<RepoData>> = use_ref(cx, || Vec::new());
+    use_future(cx, (), {
+        let repos = repos.clone();
+        move |_| async move {
+            let client = reqwest::Client::new();
+            let name = "demonthos";
+            let user: User = client
+                .get(format!("https://api.github.com/users/{name}"))
+                .header(
+                    AUTHORIZATION,
+                    "Bearer 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",
+                )
+                // .header("x-ratelimit-limit", "60")
+                .send()
+                .await
+                .unwrap()
+                .json()
+                .await
+                .unwrap();
+            let orgs: Vec<Organization> = client
+                .get(&user.organizations_url)
+                .header(
+                    AUTHORIZATION,
+                    "Bearer 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",
+                )
+                .send()
+                .await
+                .unwrap()
+                .json()
+                .await
+                .unwrap();
+            let new_repos: Vec<Repo> = client
+                .get(&user.repos_url)
+                .header(
+                    AUTHORIZATION,
+                    "Bearer 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",
+                )
+                .query(&[("affiliation", "owner,collaborator,organization_member")])
+                .send()
+                .await
+                .unwrap()
+                .json()
+                .await
+                .unwrap();
+            let mut new_repos: Vec<_> = new_repos
+                .into_iter()
+                .filter(|repo| !repo.fork && !repo.archived)
+                .collect();
+            for org in orgs {
+                let orgs_repos: Vec<Repo> = client
+                    .get(&org.repos_url)
+                    .header(
+                        AUTHORIZATION,
+                        "Bearer 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",
+                    )
+                    .query(&[("affiliation", "owner,collaborator,organization_member")])
+                    .send()
+                    .await
+                    .unwrap()
+                    .json()
+                    .await
+                    .unwrap();
+                let orgs_repos: Vec<_> = orgs_repos
+                    .into_iter()
+                    .filter(|repo| !repo.fork && !repo.archived)
+                    .collect();
+                new_repos.extend(orgs_repos);
             }
-            h2 {
-                "I'm a computer science student in Overland Park, KS."
-            }
-            Projects{}
-            div {
-                display: "flex",
-                flex_direction: "row",
-                justify_content: "top",
-                Card{
-                    image: "linear-gradient(115deg, #1982c4, #6a4c93)",
-                    h2 {
-                        "I'm interested in: "
-                    }
-                    ul {
-                        li {
-                            "The future of web development with WASM"
-                        }
-                        li {
-                            "Embedded Systems"
-                        }
-                        li {
-                            "Incremental Computation"
-                        }
-                        li {
-                            "Natural Language Processing"
-                        }
-                    }
+
+            let mut built_repos: Vec<RepoData> = Vec::new();
+
+            for repo in new_repos {
+                let prs = Default::default();
+                let contributors: Vec<Contributor> = client
+                    .get(&repo.contributors_url)
+                    .header(
+                        AUTHORIZATION,
+                        "Bearer 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",
+                    )
+                    .send()
+                    .await
+                    .unwrap()
+                    .json()
+                    .await
+                    .unwrap();
+                if let Some(contributor) = contributors
+                    .into_iter()
+                    .find(|contributor| contributor.login.to_lowercase() == name.to_lowercase())
+                {
+                    built_repos.push(RepoData {
+                        repo,
+                        prs,
+                        contributor,
+                    });
                 }
-                Card{
-                    image: "linear-gradient(115deg, #ffca3a, #1982c4)",
-                    h2 {
-                        "Languages I've worked with: "
-                    }
-                    ul {
-                        li {
-                            "🦀 Rust"
-                        }
-                        li {
-                            "🐍 Python"
-                        }
-                        li {
-                            "⚙️ C++"
-                        }
-                        li {
-                            "☕ Java"
-                        }
-                    }
-                }
             }
+
+            built_repos.sort_by(|a, b| b.repo.stargazers_count.cmp(&a.repo.stargazers_count));
+
+            repos.set(built_repos);
         }
-    })
-}
-
-fn Header(cx: Scope) -> Element {
-    cx.render(rsx! {
-        header {
-            div {
-                display: "flex",
-                flex_direction: "row",
-                justify_content: "space-between",
-                align_items: "center",
-
-                padding: "0px 100px",
-                height: "5vh",
-                background_color: "#8ac926",
-                Link {
-                    href: "/aboutme",
-                    "About Me"
-                }
-                Link {
-                    href: "/projects",
-                    "Projects"
-                }
-                Link {
-                    href: "/technologies",
-                    "Technologies"
-                }
-            }
-        }
-    })
-}
-
-#[derive(Props)]
-struct LinkProps<'a> {
-    href: &'static str,
-    children: Element<'a>,
-}
-
-fn Link<'a>(cx: Scope<'a, LinkProps<'a>>) -> Element<'a> {
-    cx.render(rsx! {
-        div {
-            class: "link",
-            display: "flex",
-            flex_direction: "colum",
-            align_items: "center",
-            justify_content: "center",
-            height: "100%",
-            width: "100%",
-            a {
-                font: "sans-serif",
-                href: "{cx.props.href}",
-                color: "black",
-                text_decoration: "none",
-                &cx.props.children
-            }
-        }
-    })
-}
-
-#[inline_props]
-fn Card<'a>(cx: Scope, image: &'static str, children: Element<'a>) -> Element {
-    cx.render(rsx! {
-        div {
-            display: "flex",
-            flex_direction: "column",
-            align_items: "center",
-            justify_content: "center",
-            class: "card",
-            padding: "20px",
-            background: "{image}",
-            children
-        }
-    })
-}
-
-#[inline_props]
-fn Projects(cx: Scope) -> Element {
-    const CARDS: usize = 6;
-
-    #[derive(Props)]
-    struct ProjectsCardProps<'a, 'b> {
-        image: &'static str,
-        name: &'static str,
-        link: &'static str,
-        focused: UseState<Option<usize>>,
-        altrinates: [Cell<Option<LazyNodes<'a, 'b>>>; CARDS - 1],
-        idx: usize,
+    });
+    enum HoveredRepo {
+        None,
+        Hovered(usize),
+        Focused(usize),
     }
 
-    fn ProjectsCard<'a, 'b>(cx: Scope<'a, ProjectsCardProps<'a, 'b>>) -> Element<'a> {
-        if let Some(focused) = cx.props.focused.get() {
-            if *focused != cx.props.idx {
-                let content = if *focused > cx.props.idx {
-                    cx.props.altrinates[focused - 1].take().unwrap()
-                } else {
-                    cx.props.altrinates[*focused].take().unwrap()
-                };
-                return {
-                    cx.render(rsx! {
-                        div {
-                            display: "flex",
-                            flex_direction: "column",
-                            align_items: "center",
-                            justify_content: "center",
-                            class: "card",
-                            padding: "20px",
-                            width: "150px",
-                            height: "150px",
-                            background: "{cx.props.image}",
-                            text_align: "center",
-                            content
-                        }
-                    })
-                };
+    impl HoveredRepo {
+        fn value(&self) -> Option<usize> {
+            match self {
+                HoveredRepo::None => None,
+                HoveredRepo::Hovered(idx) => Some(*idx),
+                HoveredRepo::Focused(idx) => Some(*idx),
             }
         }
-        cx.render(rsx! {
-            div {
-                display: "flex",
-                flex_direction: "column",
-                align_items: "center",
-                justify_content: "center",
-                class: "card hoverablecard",
-                padding: "20px",
-                width: "150px",
-                height: "150px",
-                background: "{cx.props.image}",
-                onmouseover: |_| cx.props.focused.set(Some(cx.props.idx)),
-                onmousemove: |_| cx.props.focused.set(Some(cx.props.idx)),
-                onmouseleave: |_| {
-                    if *cx.props.focused.get() == Some(cx.props.idx) {
-                        cx.props.focused.set(None);
-                    }
-                },
-                a {
-                    href: "{cx.props.link}",
-                    text_align: "center",
-                    onfocusin: |_| cx.props.focused.set(Some(cx.props.idx)),
-                    onmousemove: |_| cx.props.focused.set(Some(cx.props.idx)),
-                    onfocusout: |_| {
-                        if *cx.props.focused.get() == Some(cx.props.idx) {
-                            cx.props.focused.set(None);
-                        }
-                    },
-                    "{cx.props.name}"
-                }
-            }
-        })
     }
 
-    let focused = use_state(&cx, || None);
+    let hovered_repo = use_state(cx, || HoveredRepo::None);
+    let repo_request_resolver: &Coroutine<usize> = use_coroutine(cx, {
+        to_owned![repos];
+        |mut rx| async move {
+            let client = reqwest::Client::new();
+            let name = "demonthos";
+            while let Some(idx) = rx.next().await {
+                let read = repos.read();
+                if let Some(repo) = read.get(idx) {
+                    let repo: &RepoData = repo;
+                    if repo.prs.is_some() {
+                        continue;
+                    }
+                    let full_name = repo.repo.full_name.clone();
+                    drop(read);
+                    let prs = client
+                        .get(format!(
+                            "https://api.github.com/search/issues?q=is:pr+repo:{full_name}+author:{name}"
+                        ))
+                        .header(
+                            AUTHORIZATION,
+                            "Bearer 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",
+                        )
+                        .send()
+                        .await
+                        .unwrap()
+                        .json()
+                        .await
+                        .unwrap();
+                    let mut write = repos.write();
+                    if let Some(repo) = write.get_mut(idx) {
+                        let repo: &mut RepoData = repo;
+                        repo.prs = Some(prs);
+                    }
+                }
+            }
+        }
+    });
 
-    cx.render(rsx! {
+    let repos = repos.read();
+    let mut cards: [[Option<LazyNodes>; 3]; 3] = Default::default();
+    cards[0][0] = Some(rsx! {
         Card {
-            image: "linear-gradient(115deg, #ff595e, #8ac926)",
+            h1 { "Hi, I'm Evan!" }
             h2 {
-                "Here are some projects I've worked on:"
+                class: "break-words w-11/12",
+                "I'm a computer science student in Overland Park, KS. Here are a few projects I have been working on:"
             }
+        }
+    });
 
-            table {
-                tr{
-                    td{
-                        ProjectsCard {
-                            image: "linear-gradient(115deg, #ffca3a, #ff595e)",
-                            name: "Dioxus",
-                            link: "https://github.com/DioxusLabs/dioxus",
-                            focused: focused.clone(),
-                            altrinates: [
-                                Cell::new(Some(rsx!{
-                                    p{
-                                        "Blitz is a wgpu frontend for dioxus"
+    let current_hovered = hovered_repo.current().value();
+    let mut prs = current_hovered.and_then(|idx| {
+        repos
+            .get(idx)
+            .and_then(|repo| repo.prs.as_ref().map(|prs| prs.items.iter()))
+    });
+    let mut idx = 0;
+    for row in &mut cards {
+        for card in row {
+            if card.is_none() {
+                if prs.is_none() || current_hovered == Some(idx) {
+                    if let Some(repo) = repos.get(idx) {
+                        let repo = &repo.repo;
+                        *card = Some(rsx! {
+                            Card {
+                                onhover: move |_| {
+                                    repo_request_resolver.send(idx);
+                                    if let HoveredRepo::None = &*hovered_repo.current() {
+                                        hovered_repo.set(HoveredRepo::Hovered(idx));
                                     }
-                                })),
-                                Cell::new(Some(rsx!{
-                                    p{
-                                        "Iron Oxide is a game engine built with the raylib renderer"
+                                },
+                                onfocus: move |_| {
+                                    repo_request_resolver.send(idx);
+                                    hovered_repo.set(HoveredRepo::Focused(idx));
+                                },
+                                onfocusout: move |_| {
+                                    if let HoveredRepo::Focused(cur_idx) = &*hovered_repo.current() {
+                                        if *cur_idx == idx {
+                                            hovered_repo.set(HoveredRepo::None);
+                                        }
                                     }
-                                })),
-                                Cell::new(Some(rsx!{
-                                    p{
-                                        "Patina is a cross platform code editor."
+                                },
+                                onhoverout: move |_| {
+                                    if let HoveredRepo::Hovered(cur_idx) = &*hovered_repo.current() {
+                                        if *cur_idx == idx {
+                                            hovered_repo.set(HoveredRepo::None);
+                                        }
                                     }
-                                })),
-                                Cell::new(Some(rsx!{
-                                    p{
-                                        "A demonstration of different broad phase collision methods"
+                                },
+                                focusable: true,
+                                a {
+                                    href: "{repo.html_url}",
+                                    class: "text-xl text-blue-600 visited:text-purple-600 capitalize m-4",
+                                    "{repo.name}"
+                                }
+                                repo.description.as_ref().map(|discription| {
+                                    rsx! {
+                                        p {
+                                            class: "break-words w-11/12",
+                                            "{discription}"
+                                        }
                                     }
-                                })),
-                                Cell::new(Some(rsx!{
-                                    p{
-                                        "Simulates trafic in a randomly generated city"
-                                    }
-                                })),
-                            ],
-                            idx: 0
-                        }
+                                })
+                                p { "Stars: {repo.stargazers_count}" }
+                            }
+                        });
                     }
-                    td{
-                        ProjectsCard {
-                            image: "linear-gradient(115deg, #ff595e, #1982c4)",
-                            name: "Blitz",
-                            link: "https://github.com/DioxusLabs/blitz",
-                            focused: focused.clone(),
-                            altrinates: [
-                                Cell::new(Some(rsx!{
-                                    p{
-                                        "Dioxus is a react like cross platform web framework"
+                } else if let Some(pr) = prs.as_mut().and_then(|prs| prs.next()) {
+                    *card = Some(rsx! {
+                        Card {
+                            onfocus: move |_| {
+                                repo_request_resolver.send(idx);
+                                hovered_repo.set(HoveredRepo::Focused(idx));
+                            },
+                            focusable: true,
+                            h1 {
+                                // href: "{pr.html_url}",
+                                // class: "text-blue-600 visited:text-purple-600",
+                                class: "text-xl capitalize m-4",
+                                "{pr.title}"
+                            }
+                            pr.body.as_ref().map(|discription| {
+                                const MAX_LEN: usize = 80;
+                                let discription = if discription.len() > MAX_LEN {
+                                    discription[..(MAX_LEN-3)].to_string()+"..."
+                                } else {
+                                    discription.to_string()
+                                };
+                                rsx! {
+                                    p {
+                                        class: "break-words w-11/12",
+                                        "{discription}"
                                     }
-                                })),
-                                Cell::new(Some(rsx!{
-                                    p{
-                                        "I am the solo creator"
-                                    }
-                                })),
-                                Cell::new(Some(rsx!{
-                                    p{
-                                        "I am the solo creator"
-                                    }
-                                })),
-                                Cell::new(Some(rsx!{
-                                    p{
-                                        "Contains a implementation of a kd-tree, and quadtree"
-                                    }
-                                })),
-                                Cell::new(Some(rsx!{
-                                    p{
-                                        "Built with the Tkinter GUI toolkit"
-                                    }
-                                })),
-                            ],
-                            idx: 1
+                                }
+                            })
                         }
-                    }
-                    td{
-                        ProjectsCard {
-                            image: "linear-gradient(115deg, #1982c4, #6a4c93)",
-                            name: "Iron Oxide",
-                            link: "https://github.com/demonthos/ironoxide",
-                            focused: focused.clone(),
-                            altrinates: [
-                                Cell::new(Some(rsx!{
-                                    p{
-                                        "I am one of the maintainers"
-                                    }
-                                })),
-                                Cell::new(Some(rsx!{
-                                    p{
-                                        "It uses incremental computation to quickly update applications"
-                                    }
-                                })),
-                                Cell::new(Some(rsx!{
-                                    p{
-                                        "It is built with dioxus, and works in the web, terminal, and desktop."
-                                    }
-                                })),
-                                Cell::new(Some(rsx!{
-                                    p{
-                                        "These data structures help speed up collision in large groups of objects"
-                                    }
-                                })),
-                                Cell::new(Some(rsx!{
-                                    p{
-                                        "Implements the A* pathfinding algorithm to generate paths between trafic lights"
-                                    }
-                                })),
-                            ],
-                            idx: 2
-                        }
-                    }
+                    });
                 }
-                tr{
-                    td{
-                        ProjectsCard {
-                            image: "linear-gradient(-115deg, #ffca3a, #1982c4)",
-                            name: "Patina",
-                            link: "https://github.com/demonthos/patina",
-                            focused: focused.clone(),
-                            altrinates: [
-                                Cell::new(Some(rsx!{
-                                    p{
-                                        "One of the top 100 most downloaded #gui rust libraries"
+                idx += 1;
+            }
+        }
+    }
+
+    render! {
+        div { class: "flex flex-col justify-center items-center h-full w-full",
+            onmousedown: move |_| {
+                hovered_repo.set(HoveredRepo::None);
+            },
+            table {
+                for row in cards {
+                    tr {
+                        for card in row {
+                            td {
+                                if let Some(card) = card {
+                                    card
+                                }
+                                else if repos.is_empty() {
+                                    rsx!{
+                                        Card {
+                                            div {
+                                                class: "w-1/3 h-6 animate-pulse bg-slate-200 dark:bg-slate-700 rounded-lg m-4",
+                                            }
+                                            div {
+                                                class: "w-4/5 h-4 animate-pulse bg-slate-200 dark:bg-slate-700 rounded-lg m-1",
+                                            }
+                                            div {
+                                                class: "w-4/5 h-4 animate-pulse bg-slate-200 dark:bg-slate-700 rounded-lg m-1",
+                                            }
+                                            div {
+                                                class: "w-4/5 h-4 animate-pulse bg-slate-200 dark:bg-slate-700 rounded-lg m-1",
+                                            }
+                                            div {
+                                                class: "w-4/5 h-4 animate-pulse bg-slate-200 dark:bg-slate-700 rounded-lg m-1",
+                                            }
+                                        }
                                     }
-                                })),
-                                Cell::new(Some(rsx!{
-                                    p{
-                                        "I am one of the maintainers."
+                                }
+                                else {
+                                    rsx! {
+                                        Card {}
                                     }
-                                })),
-                                Cell::new(Some(rsx!{
-                                    p{
-                                        "It uses a entity component system to manage game state"
-                                    }
-                                })),
-                                Cell::new(Some(rsx!{
-                                    p{
-                                        "It intigrates with pygame to demonstrate the different data structures"
-                                    }
-                                })),
-                                Cell::new(Some(rsx!{
-                                    img{
-                                        src: "https://user-images.githubusercontent.com/66571940/185226084-94a2d00b-c170-4b2d-93dc-18d9ce256ca5.png",
-                                        width: "100%",
-                                        height: "100%",
-                                    }
-                                })),
-                            ],
-                            idx: 3
-                        }
-                    }
-                    td{
-                        ProjectsCard {
-                            image: "linear-gradient(-115deg, #ff595e, #ffca3a)",
-                            name: "Bounding volumes in pygame",
-                            link: "https://github.com/Demonthos/pyGameQuadTree"
-                            focused: focused.clone(),
-                            altrinates: [
-                                Cell::new(Some(rsx!{
-                                    p{
-                                        "I worked on the terminal renderer, native renderer abstraction, and hot reloading"
-                                    }
-                                })),
-                                Cell::new(Some(rsx!{
-                                    p{
-                                        "I built the initial implemenatation of the renderer and event system"
-                                    }
-                                })),
-                                Cell::new(Some(rsx!{
-                                    p{
-                                        "It uses a bounding volume heigharchy and parrellel archetecture to speed up collisions"
-                                    }
-                                })),
-                                Cell::new(Some(rsx!{
-                                    p{
-                                        "It has multiple cursor support"
-                                    }
-                                })),
-                                Cell::new(Some(rsx!{
-                                    p{
-                                        "🐍 Built with Python"
-                                    }
-                                })),
-                            ],
-                            idx: 4
-                        }
-                    }
-                    td{
-                        ProjectsCard {
-                            image: "linear-gradient(-115deg, #6a4c93, #ff595e)",
-                            name: "Traffic simulation",
-                            link: "https://github.com/Demonthos/traficsimpython"
-                            focused: focused.clone(),
-                            altrinates: [
-                                Cell::new(Some(rsx!{
-                                    p{
-                                        "🦀 Built with Rust"
-                                    }
-                                })),
-                                Cell::new(Some(rsx!{
-                                    p{
-                                        "🦀 Built with Rust"
-                                    }
-                                })),
-                                Cell::new(Some(rsx!{
-                                    p{
-                                        "🦀 Built with Rust"
-                                    }
-                                })),
-                                Cell::new(Some(rsx!{
-                                    p{
-                                        "🦀 Built with Rust"
-                                    }
-                                })),
-                                Cell::new(Some(rsx!{
-                                    p{
-                                        "🐍 Built with Python"
-                                    }
-                                })),
-                            ],
-                            idx: 5
+                                }
+                            }
                         }
                     }
                 }
             }
+        }
+    }
+}
+
+#[inline_props]
+fn Card<'a>(
+    cx: Scope,
+    children: Element<'a>,
+    onhover: Option<EventHandler<'a>>,
+    onhoverout: Option<EventHandler<'a>>,
+    onfocus: Option<EventHandler<'a>>,
+    onfocusout: Option<EventHandler<'a>>,
+    focusable: Option<bool>,
+) -> Element {
+    cx.render(rsx! {
+        div { class: "flex flex-col justify-center items-center ring-0 hover:ring-4 focus:ring-4 focus:rounded-3xl bg-slate-100 dark:bg-slate-800 hover:bg-blue-100 dark:hover:bg-blue-900 rounded-md hover:rounded-xl shadow-md hover:shadow-lg m-4 transition-all duration-200 text-center w-64 h-64",
+            onmouseenter: move |_| {
+                if let Some(f) = onhover.as_ref() { f.call(()) }
+            },
+            onmouseleave: move |_| {
+                if let Some(f) = onhoverout.as_ref() { f.call(()) }
+            },
+            onfocusin: move |_| {
+                if let Some(f) = onfocus.as_ref() { f.call(()) }
+            },
+            onfocusout: move |_| {
+                if let Some(f) = onfocusout.as_ref() { f.call(()) }
+            },
+            tabindex: focusable.filter(|f| *f).map(|_| 0),
+            children
         }
     })
 }
