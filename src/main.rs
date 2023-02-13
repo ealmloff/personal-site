@@ -1,13 +1,16 @@
 #![allow(non_snake_case)]
 
+use std::io::Write;
+
+use dioxus_storage::{server_state, use_init_storage, InitStorage};
 use futures_util::stream::StreamExt;
 
 use chrono::{DateTime, Utc};
 use dioxus::prelude::*;
-use reqwest::header::AUTHORIZATION;
-use serde::Deserialize;
+use reqwest::header::{AUTHORIZATION, USER_AGENT};
+use serde::{Deserialize, Serialize};
 
-#[derive(Deserialize, Debug)]
+#[derive(Debug, Serialize, Deserialize)]
 struct User {
     avatar_url: String,        // https://avatars.githubusercontent.com/u/66571940?v=4
     organizations_url: String, // https://api.github.com/users/Demonthos/orgs
@@ -26,7 +29,7 @@ struct User {
     updated_at: DateTime<Utc>, // 2023-01-28T13:29:59Z
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Debug, Serialize, Deserialize)]
 struct Repo {
     full_name: String,
     name: String,
@@ -42,14 +45,14 @@ struct Repo {
     contributors_url: String,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
 struct RepoData {
     repo: Repo,
     prs: Option<SearchResult>,
     contributor: Contributor,
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Debug, Serialize, Deserialize)]
 struct Pr {
     html_url: String,
     draft: bool,
@@ -60,32 +63,67 @@ struct Pr {
     updated_at: DateTime<Utc>,
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Debug, Serialize, Deserialize)]
 struct SearchResult {
     total_count: u32,
     incomplete_results: bool,
     items: Vec<Pr>,
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Debug, Serialize, Deserialize)]
 struct Organization {
     login: String,
     description: Option<String>,
     repos_url: String,
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Debug, Serialize, Deserialize)]
 struct Contributor {
     login: String,
     contributions: u32,
 }
 
 fn main() {
-    dioxus_web::launch(app);
+    #[cfg(target_arch = "wasm32")]
+    dioxus_web::launch_cfg(app, dioxus_web::Config::new().hydrate(true));
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        let template_pre = r#"<!DOCTYPE html>
+<html class="dark:bg-slate-900 dark:text-slate-400">
+<head>
+  <title>Testing</title>
+  <meta content="text/html;charset=utf-8" http-equiv="Content-Type" />
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta charset="UTF-8" />
+  <link rel="stylesheet" href="/output.css" />
+</head>
+<body>
+  <div id="main">"#;
+        let template_post = r#"</div>
+         <script type="module">
+    import init from "/{base_path}/assets/dioxus/{app_name}.js";
+    init("/{base_path}/assets/dioxus/{app_name}_bg.wasm").then(wasm => {
+      if (wasm.__wbindgen_start == undefined) {
+        wasm.main();
+      }
+    });
+  </script>
+</body>
+</html>"#;
+        let mut file = std::fs::File::create("index.html").unwrap();
+        let mut vdom = VirtualDom::new(app);
+        let _ = vdom.rebuild();
+        let _ = vdom.render_immediate();
+        let renderered = dioxus_ssr::pre_render(&vdom);
+        file.write_fmt(format_args!("{template_pre}{renderered}{template_post}"))
+            .unwrap();
+    }
 }
 
 fn app(cx: Scope) -> Element {
+    use_init_storage(cx);
     cx.render(rsx! {
+        InitStorage {}
         div { display: "flex", flex_direction: "row", justify_content: "right",
             a { margin: "10px", href: "https://www.linkedin.com/in/evan-almloff-571467213/", img { src: "./In-Blue-34.png", width: "32px", height: "32px" } }
             a { margin: "10px", href: "https://github.com/Demonthos", img { src: "./GitHub-Mark-Light-32px.png", width: "32px", height: "32px" } }
@@ -95,61 +133,44 @@ fn app(cx: Scope) -> Element {
 }
 
 fn Body(cx: Scope) -> Element {
-    let repos: &UseRef<Vec<RepoData>> = use_ref(cx, || Vec::new());
-    use_future(cx, (), {
-        let repos = repos.clone();
-        move |_| async move {
-            let client = reqwest::Client::new();
-            let name = "demonthos";
-            let user: User = client
-                .get(format!("https://api.github.com/users/{name}"))
-                .header(
-                    AUTHORIZATION,
-                    "Bearer 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",
-                )
-                // .header("x-ratelimit-limit", "60")
-                .send()
-                .await
-                .unwrap()
-                .json()
-                .await
-                .unwrap();
-            let orgs: Vec<Organization> = client
-                .get(&user.organizations_url)
-                .header(
-                    AUTHORIZATION,
-                    "Bearer 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",
-                )
-                .send()
-                .await
-                .unwrap()
-                .json()
-                .await
-                .unwrap();
-            let new_repos: Vec<Repo> = client
-                .get(&user.repos_url)
-                .header(
-                    AUTHORIZATION,
-                    "Bearer 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",
-                )
-                .query(&[("affiliation", "owner,collaborator,organization_member")])
-                .send()
-                .await
-                .unwrap()
-                .json()
-                .await
-                .unwrap();
-            let mut new_repos: Vec<_> = new_repos
-                .into_iter()
-                .filter(|repo| !repo.fork && !repo.archived)
-                .collect();
-            for org in orgs {
-                let orgs_repos: Vec<Repo> = client
-                    .get(&org.repos_url)
+    let repos: &UseRef<Vec<RepoData>> = use_ref(cx, || {
+        server_state(cx, "github repos", || {
+            #[cfg(target_arch = "wasm32")]
+            return todo!();
+            #[cfg(not(target_arch = "wasm32"))]
+            return tokio::runtime::Runtime::new().unwrap().block_on(async move {
+                let client = reqwest::Client::new();
+                let name = "demonthos";
+                let user: User = client
+                    .get(format!("https://api.github.com/users/{name}"))
                     .header(
                         AUTHORIZATION,
                         "Bearer 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",
-                    )
+                    ).header(USER_AGENT, "personal-website")
+                    .send()
+                    .await
+                    .unwrap()
+                    .json()
+                    .await
+                    .unwrap();
+                let orgs: Vec<Organization> = client
+                    .get(&user.organizations_url)
+                    .header(
+                        AUTHORIZATION,
+                        "Bearer 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",
+                    ).header(USER_AGENT, "personal-website")
+                    .send()
+                    .await
+                    .unwrap()
+                    .json()
+                    .await
+                    .unwrap();
+                let new_repos: Vec<Repo> = client
+                    .get(&user.repos_url)
+                    .header(
+                        AUTHORIZATION,
+                        "Bearer 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",
+                    ).header(USER_AGENT, "personal-website")
                     .query(&[("affiliation", "owner,collaborator,organization_member")])
                     .send()
                     .await
@@ -157,45 +178,64 @@ fn Body(cx: Scope) -> Element {
                     .json()
                     .await
                     .unwrap();
-                let orgs_repos: Vec<_> = orgs_repos
+                let mut new_repos: Vec<_> = new_repos
                     .into_iter()
                     .filter(|repo| !repo.fork && !repo.archived)
                     .collect();
-                new_repos.extend(orgs_repos);
-            }
-
-            let mut built_repos: Vec<RepoData> = Vec::new();
-
-            for repo in new_repos {
-                let prs = Default::default();
-                let contributors: Vec<Contributor> = client
-                    .get(&repo.contributors_url)
-                    .header(
-                        AUTHORIZATION,
-                        "Bearer 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",
-                    )
-                    .send()
-                    .await
-                    .unwrap()
-                    .json()
-                    .await
-                    .unwrap();
-                if let Some(contributor) = contributors
-                    .into_iter()
-                    .find(|contributor| contributor.login.to_lowercase() == name.to_lowercase())
-                {
-                    built_repos.push(RepoData {
-                        repo,
-                        prs,
-                        contributor,
-                    });
+                for org in orgs {
+                    let orgs_repos: Vec<Repo> = client
+                        .get(&org.repos_url)
+                        .header(
+                            AUTHORIZATION,
+                            "Bearer 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",
+                        ).header(USER_AGENT, "personal-website")
+                        .query(&[("affiliation", "owner,collaborator,organization_member")])
+                        .send()
+                        .await
+                        .unwrap()
+                        .json()
+                        .await
+                        .unwrap();
+                    let orgs_repos: Vec<_> = orgs_repos
+                        .into_iter()
+                        .filter(|repo| !repo.fork && !repo.archived)
+                        .collect();
+                    new_repos.extend(orgs_repos);
                 }
-            }
 
-            built_repos.sort_by(|a, b| b.repo.stargazers_count.cmp(&a.repo.stargazers_count));
+                let mut built_repos: Vec<RepoData> = Vec::new();
 
-            repos.set(built_repos);
-        }
+                for repo in new_repos {
+                    let prs = Default::default();
+                    let contributors: Vec<Contributor> = client
+                        .get(&repo.contributors_url)
+                        .header(
+                            AUTHORIZATION,
+                            "Bearer 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",
+                        ).header(USER_AGENT, "personal-website")
+                        .send()
+                        .await
+                        .unwrap()
+                        .json()
+                        .await
+                        .unwrap();
+                    if let Some(contributor) = contributors
+                        .into_iter()
+                        .find(|contributor| contributor.login.to_lowercase() == name.to_lowercase())
+                    {
+                        built_repos.push(RepoData {
+                            repo,
+                            prs,
+                            contributor,
+                        });
+                    }
+                }
+
+                built_repos.sort_by(|a, b| b.repo.stargazers_count.cmp(&a.repo.stargazers_count));
+
+                built_repos
+            });
+        })
     });
     enum HoveredRepo {
         None,
@@ -235,7 +275,7 @@ fn Body(cx: Scope) -> Element {
                         .header(
                             AUTHORIZATION,
                             "Bearer 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",
-                        )
+                        ).header(USER_AGENT, "personal-website")
                         .send()
                         .await
                         .unwrap()
