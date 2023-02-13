@@ -299,7 +299,7 @@ fn Body(cx: Scope) -> Element {
             h1 { "Hi, I'm Evan!" }
             h2 {
                 class: "break-words w-11/12",
-                "I'm a computer science student in Overland Park, KS. Here are a few projects I have been working on:"
+                "Here are a few projects I have been working on:"
             }
         }
     });
