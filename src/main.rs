@@ -1,9 +1,9 @@
 #![allow(non_snake_case)]
 
-use std::io::Write;
-
-use dioxus_storage::{server_state, use_init_storage, InitStorage};
+use dioxus_storage::server_storage::*;
+use dioxus_storage::*;
 use futures_util::stream::StreamExt;
+use std::io::Write;
 
 use chrono::{DateTime, Utc};
 use dioxus::prelude::*;
@@ -88,14 +88,15 @@ fn main() {
     dioxus_web::launch_cfg(app, dioxus_web::Config::new().hydrate(true));
     #[cfg(not(target_arch = "wasm32"))]
     {
-        let template_pre = r#"<!DOCTYPE html>
+        let template_pre_data = r#"<!DOCTYPE html>
 <html class="dark:bg-slate-900 dark:text-slate-400">
 <head>
   <title>Evan Almloff</title>
   <meta content="text/html;charset=utf-8" http-equiv="Content-Type" />
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
   <meta charset="UTF-8" />
-  <link rel="stylesheet" href="/output.css" />
+  <link rel="stylesheet" href="/output.css" />"#;
+        let template_post_data = r#"
 </head>
 <body>
   <div id="main">"#;
@@ -113,20 +114,21 @@ fn main() {
         let mut file = std::fs::File::create("index.html").unwrap();
         let mut vdom = VirtualDom::new(app);
         let _ = vdom.rebuild();
-        let _ = vdom.render_immediate();
         let renderered = dioxus_ssr::pre_render(&vdom);
-        file.write_fmt(format_args!("{template_pre}{renderered}{template_post}"))
-            .unwrap();
+        let data = get_data();
+        file.write_fmt(format_args!(
+            "{template_pre_data}{data}{template_post_data}{renderered}{template_post}"
+        ))
+        .unwrap();
     }
 }
 
 fn app(cx: Scope) -> Element {
-    use_init_storage(cx);
+    let right = "right";
     cx.render(rsx! {
-        InitStorage {}
-        div { display: "flex", flex_direction: "row", justify_content: "right",
-            a { margin: "10px", href: "https://www.linkedin.com/in/evan-almloff-571467213/", img { src: "./In-Blue-34.png", width: "32px", height: "32px" } }
-            a { margin: "10px", href: "https://github.com/Demonthos", img { src: "./GitHub-Mark-Light-32px.png", width: "32px", height: "32px" } }
+        div { display: "flex", flex_direction: "row", justify_content: "{right}",
+            a { margin: "10px", right: "10px", href: "https://www.linkedin.com/in/evan-almloff-571467213/", img { src: "./In-Blue-34.png", width: "32px", height: "32px" } }
+            a { margin: "10px", right: "10px", href: "https://github.com/Demonthos", img { src: "./GitHub-Mark-Light-32px.png", width: "32px", height: "32px" } }
         }
         Body {}
     })
@@ -134,18 +136,15 @@ fn app(cx: Scope) -> Element {
 
 fn Body(cx: Scope) -> Element {
     let repos: &UseRef<Vec<RepoData>> = use_ref(cx, || {
-        server_state(cx, "github repos", || {
-            #[cfg(target_arch = "wasm32")]
-            return todo!();
-            #[cfg(not(target_arch = "wasm32"))]
-            return tokio::runtime::Runtime::new().unwrap().block_on(async move {
+        server_state!(|| {
+            tokio::runtime::Runtime::new().unwrap().block_on(async move {
                 let client = reqwest::Client::new();
                 let name = "demonthos";
                 let user: User = client
                     .get(format!("https://api.github.com/users/{name}"))
                     .header(
                         AUTHORIZATION,
-                        "Bearer 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",
+                        "Bearer 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",
                     ).header(USER_AGENT, "personal-website")
                     .send()
                     .await
@@ -157,7 +156,7 @@ fn Body(cx: Scope) -> Element {
                     .get(&user.organizations_url)
                     .header(
                         AUTHORIZATION,
-                        "Bearer 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",
+                        "Bearer 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",
                     ).header(USER_AGENT, "personal-website")
                     .send()
                     .await
@@ -169,7 +168,7 @@ fn Body(cx: Scope) -> Element {
                     .get(&user.repos_url)
                     .header(
                         AUTHORIZATION,
-                        "Bearer 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",
+                        "Bearer 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",
                     ).header(USER_AGENT, "personal-website")
                     .query(&[("affiliation", "owner,collaborator,organization_member")])
                     .send()
@@ -187,7 +186,7 @@ fn Body(cx: Scope) -> Element {
                         .get(&org.repos_url)
                         .header(
                             AUTHORIZATION,
-                            "Bearer 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",
+                            "Bearer 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",
                         ).header(USER_AGENT, "personal-website")
                         .query(&[("affiliation", "owner,collaborator,organization_member")])
                         .send()
@@ -211,7 +210,7 @@ fn Body(cx: Scope) -> Element {
                         .get(&repo.contributors_url)
                         .header(
                             AUTHORIZATION,
-                            "Bearer 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",
+                            "Bearer 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",
                         ).header(USER_AGENT, "personal-website")
                         .send()
                         .await
@@ -234,9 +233,10 @@ fn Body(cx: Scope) -> Element {
                 built_repos.sort_by(|a, b| b.repo.stargazers_count.cmp(&a.repo.stargazers_count));
 
                 built_repos
-            });
+            })
         })
     });
+
     enum HoveredRepo {
         None,
         Hovered(usize),
@@ -260,21 +260,20 @@ fn Body(cx: Scope) -> Element {
             let client = reqwest::Client::new();
             let name = "demonthos";
             while let Some(idx) = rx.next().await {
-                let read = repos.read();
-                if let Some(repo) = read.get(idx) {
-                    let repo: &RepoData = repo;
-                    if repo.prs.is_some() {
-                        continue;
-                    }
-                    let full_name = repo.repo.full_name.clone();
-                    drop(read);
+                if let Some(full_name) = {
+                    let read = repos.read();
+                    read.get(idx).and_then(|repo| {
+                        let repo: &RepoData = repo;
+                        repo.prs.is_none().then(|| repo.repo.full_name.clone())
+                    })
+                } {
                     let prs = client
                         .get(format!(
                             "https://api.github.com/search/issues?q=is:pr+repo:{full_name}+author:{name}"
                         ))
                         .header(
                             AUTHORIZATION,
-                            "Bearer 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",
+                            "Bearer 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",
                         ).header(USER_AGENT, "personal-website")
                         .send()
                         .await
@@ -403,37 +402,39 @@ fn Body(cx: Scope) -> Element {
                 hovered_repo.set(HoveredRepo::None);
             },
             table {
-                for row in cards {
-                    tr {
-                        for card in row {
-                            td {
-                                if let Some(card) = card {
-                                    card
-                                }
-                                else if repos.is_empty() {
-                                    rsx!{
-                                        Card {
-                                            div {
-                                                class: "w-1/3 h-6 animate-pulse bg-slate-200 dark:bg-slate-700 rounded-lg m-4",
-                                            }
-                                            div {
-                                                class: "w-4/5 h-4 animate-pulse bg-slate-200 dark:bg-slate-700 rounded-lg m-1",
-                                            }
-                                            div {
-                                                class: "w-4/5 h-4 animate-pulse bg-slate-200 dark:bg-slate-700 rounded-lg m-1",
-                                            }
-                                            div {
-                                                class: "w-4/5 h-4 animate-pulse bg-slate-200 dark:bg-slate-700 rounded-lg m-1",
-                                            }
-                                            div {
-                                                class: "w-4/5 h-4 animate-pulse bg-slate-200 dark:bg-slate-700 rounded-lg m-1",
+                tbody{
+                    for row in cards {
+                        tr {
+                            for card in row {
+                                td {
+                                    if let Some(card) = card {
+                                        card
+                                    }
+                                    else if repos.is_empty() {
+                                        rsx!{
+                                            Card {
+                                                div {
+                                                    class: "w-1/3 h-6 animate-pulse bg-slate-200 dark:bg-slate-700 rounded-lg m-4",
+                                                }
+                                                div {
+                                                    class: "w-4/5 h-4 animate-pulse bg-slate-200 dark:bg-slate-700 rounded-lg m-1",
+                                                }
+                                                div {
+                                                    class: "w-4/5 h-4 animate-pulse bg-slate-200 dark:bg-slate-700 rounded-lg m-1",
+                                                }
+                                                div {
+                                                    class: "w-4/5 h-4 animate-pulse bg-slate-200 dark:bg-slate-700 rounded-lg m-1",
+                                                }
+                                                div {
+                                                    class: "w-4/5 h-4 animate-pulse bg-slate-200 dark:bg-slate-700 rounded-lg m-1",
+                                                }
                                             }
                                         }
                                     }
-                                }
-                                else {
-                                    rsx! {
-                                        Card {}
+                                    else {
+                                        rsx! {
+                                            Card {}
+                                        }
                                     }
                                 }
                             }
