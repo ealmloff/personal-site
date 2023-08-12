@@ -34,12 +34,12 @@ async fn main() {
 // Hydrate the page
 #[cfg(feature = "web")]
 fn main() {
-    dioxus_web::launch_with_props(
-        dioxus_fullstack::router::RouteWithCfg::<Route>,
-        dioxus_fullstack::prelude::get_root_props_from_document()
-            .expect("Failed to get root props from document"),
-        dioxus_web::Config::default().hydrate(true),
-    );
+    // dioxus_web::launch_with_props(
+    //     dioxus_fullstack::router::RouteWithCfg::<Route>,
+    //     dioxus_fullstack::prelude::get_root_props_from_document()
+    //         .expect("Failed to get root props from document"),
+    //     dioxus_web::Config::default().hydrate(true),
+    // );
 }
 
 #[cfg(not(any(feature = "web", feature = "ssr")))]
