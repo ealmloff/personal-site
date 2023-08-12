@@ -2,7 +2,7 @@ module.exports = {
   mode: "all",
   content: [
     "./src/**/*.{rs,html,css}",
-    "./dist/**/*.html",
+    "./docs/**/*.html",
   ],
   theme: {
     extend: {},

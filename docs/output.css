@@ -538,6 +538,10 @@ video {
   display: table;
 }
 
+.hidden {
+  display: none;
+}
+
 .h-4 {
   height: 1rem;
 }
@@ -706,6 +710,16 @@ video {
   .dark\:bg-slate-800 {
     --tw-bg-opacity: 1;
     background-color: rgb(30 41 59 / var(--tw-bg-opacity));
+  }
+
+  .dark\:bg-slate-900 {
+    --tw-bg-opacity: 1;
+    background-color: rgb(15 23 42 / var(--tw-bg-opacity));
+  }
+
+  .dark\:text-slate-400 {
+    --tw-text-opacity: 1;
+    color: rgb(148 163 184 / var(--tw-text-opacity));
   }
 
   .dark\:hover\:bg-blue-900:hover {
