@@ -106,7 +106,7 @@ fn Body(cx: Scope) -> Element {
             .json()
             .await
             .unwrap();
-        let orgs: Vec<Organization> = client
+        let mut orgs: Vec<Organization> = client
             .get(&user.organizations_url)
             .header(USER_AGENT, "personal-website")
             .bearer_auth(std::env!("GITHUB_TOKEN"))
@@ -116,6 +116,11 @@ fn Body(cx: Scope) -> Element {
             .json()
             .await
             .unwrap();
+        orgs.push(Organization {
+            login: "Floneum".to_string(),
+            description: None,
+            repos_url: "https://api.github.com/orgs/Floneum/repos".to_string(),
+        });
         let new_repos: Vec<Repo> = client
             .get(&user.repos_url)
             .header(USER_AGENT, "personal-website")
