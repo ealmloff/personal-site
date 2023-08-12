@@ -10,18 +10,20 @@ edition = "2021"
 # dioxus-web = { git = "https://github.com/dioxuslabs/dioxus" }
 # dioxus = { git = "https://github.com/dioxuslabs/dioxus" }
 
-dioxus_storage = { path = "d:/users/desktop/github/dioxus-storage" }
-dioxus = { path = "C:/Users/Desktop/github/dioxus/packages/dioxus" }
-dioxus-web = { path = "C:/Users/Desktop/github/dioxus/packages/web", features = ["hydrate"] }
+dioxus = "0.4"
+dioxus-fullstack = { version = "0.4", features = ["router"] }
+dioxus-router = "0.4.1"
+dioxus-web = { version = "0.4", features = ["hydrate"], optional = true }
 reqwest = { version = "0.11.14", features = ["json"] }
 serde = { version = "1.0", features = ["derive"] }
 chrono = { version = "0.4.23", features = ["serde"] }
 futures-util = "0.3.26"
+tokio = { version = "1", features = ["full"], optional = true }
 
-# server side rendering
-[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
-dioxus-ssr = { path = "C:/Users/Desktop/github/dioxus/packages/ssr" }
-tokio = { version = "1", features = ["full"] }
+[features]
+default = []
+ssr = ["tokio", "dioxus-fullstack/ssr"]
+web = ["dioxus-web"]
 
 [profile.release]
 opt-level = "z"
