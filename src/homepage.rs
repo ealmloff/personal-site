@@ -99,6 +99,7 @@ fn Body(cx: Scope) -> Element {
         let user: User = client
             .get(format!("https://api.github.com/users/{name}"))
             .header(USER_AGENT, "personal-website")
+            .bearer_auth(std::env!("GITHUB_TOKEN"))
             .send()
             .await
             .unwrap()
@@ -108,6 +109,7 @@ fn Body(cx: Scope) -> Element {
         let orgs: Vec<Organization> = client
             .get(&user.organizations_url)
             .header(USER_AGENT, "personal-website")
+            .bearer_auth(std::env!("GITHUB_TOKEN"))
             .send()
             .await
             .unwrap()
@@ -117,6 +119,7 @@ fn Body(cx: Scope) -> Element {
         let new_repos: Vec<Repo> = client
             .get(&user.repos_url)
             .header(USER_AGENT, "personal-website")
+            .bearer_auth(std::env!("GITHUB_TOKEN"))
             .query(&[("affiliation", "owner,collaborator,organization_member")])
             .send()
             .await
@@ -132,6 +135,7 @@ fn Body(cx: Scope) -> Element {
             let orgs_repos: Vec<Repo> = client
                 .get(&org.repos_url)
                 .header(USER_AGENT, "personal-website")
+                .bearer_auth(std::env!("GITHUB_TOKEN"))
                 .query(&[("affiliation", "owner,collaborator,organization_member")])
                 .send()
                 .await
@@ -153,6 +157,7 @@ fn Body(cx: Scope) -> Element {
             let contributors: Vec<Contributor> = client
                 .get(&repo.contributors_url)
                 .header(USER_AGENT, "personal-website")
+                .bearer_auth(std::env!("GITHUB_TOKEN"))
                 .send()
                 .await
                 .unwrap()
@@ -212,6 +217,7 @@ fn Body(cx: Scope) -> Element {
                             "https://api.github.com/search/issues?q=is:pr+repo:{full_name}+author:{name}"
                         ))
                         .header(USER_AGENT, "personal-website")
+                        .bearer_auth(std::env!("GITHUB_TOKEN"))
                         .send()
                         .await
                         .unwrap()
