@@ -12,9 +12,9 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Serialize, Deserialize, Clone)]
 struct User {
     avatar_url: String,        // https://avatars.githubusercontent.com/u/66571940?v=4
-    organizations_url: String, // https://api.github.com/users/Demonthos/orgs
-    repos_url: String,         // https://api.github.com/users/Demonthos/repos
-    events_url: String,        // https://api.github.com/users/Demonthos/events
+    organizations_url: String, // https://api.github.com/users/ealmloff/orgs
+    repos_url: String,         // https://api.github.com/users/ealmloff/repos
+    events_url: String,        // https://api.github.com/users/ealmloff/events
     name: String,              // ealmloff
     company: Option<String>,   // null
     blog: Option<String>,      // evanalmloff.me
@@ -86,7 +86,7 @@ pub fn Home(cx: Scope) -> Element {
     cx.render(rsx! {
         div { display: "flex", flex_direction: "row", justify_content: "right",
             a { margin: "10px", right: "10px", href: "https://www.linkedin.com/in/evan-almloff-571467213/", img { src: "./In-Blue-34.png", width: "32px", height: "32px" } }
-            a { margin: "10px", right: "10px", href: "https://github.com/Demonthos", img { src: "./GitHub-Mark-Light-32px.png", width: "32px", height: "32px" } }
+            a { margin: "10px", right: "10px", href: "https://github.com/ealmloff", img { src: "./GitHub-Mark-Light-32px.png", width: "32px", height: "32px" } }
         }
         Body {}
     })
@@ -95,7 +95,7 @@ pub fn Home(cx: Scope) -> Element {
 fn Body(cx: Scope) -> Element {
     let repos = use_server_future(cx, (), |_| async move {
         let client = reqwest::Client::new();
-        let name = "demonthos";
+        let name = "ealmloff";
         let user: User = client
             .get(format!("https://api.github.com/users/{name}"))
             .header(USER_AGENT, "personal-website")
@@ -208,7 +208,7 @@ fn Body(cx: Scope) -> Element {
         to_owned![repos];
         |mut rx| async move {
             let client = reqwest::Client::new();
-            let name = "demonthos";
+            let name = "ealmloff";
             while let Some(idx) = rx.next().await {
                 if let Some(full_name) = {
                     let read = repos.read();
@@ -397,7 +397,7 @@ fn Body(cx: Scope) -> Element {
     }
 }
 
-#[inline_props]
+#[component]
 fn Card<'a>(
     cx: Scope,
     children: Element<'a>,

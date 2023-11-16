@@ -10,9 +10,9 @@ edition = "2021"
 # dioxus-web = { git = "https://github.com/dioxuslabs/dioxus" }
 # dioxus = { git = "https://github.com/dioxuslabs/dioxus" }
 
-dioxus = "0.4"
-dioxus-fullstack = { version = "0.4", features = ["router"] }
-dioxus-router = "0.4.1"
+dioxus = { git = "https://github.com/dioxuslabs/dioxus" }
+dioxus-fullstack = { git = "https://github.com/dioxuslabs/dioxus", features = ["router"] }
+dioxus-router = { git = "https://github.com/dioxuslabs/dioxus" }
 dioxus-web = { version = "0.4", features = ["hydrate"], optional = true }
 reqwest = { version = "0.11.14", features = ["json"] }
 serde = { version = "1.0", features = ["derive"] }
