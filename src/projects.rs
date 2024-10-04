@@ -11,7 +11,7 @@ pub fn Projects() -> Element {
                         br {}
                         "I'm Evan Almloff,"
                         br {}
-                        "here's a few projects I'm working on:"
+                        "here's a few projects I've been working on:"
                     }
                     dl { class: "col-span-2 grid grid-cols-1 gap-x-8 gap-y-16 sm:grid-cols-2",
                         div {
