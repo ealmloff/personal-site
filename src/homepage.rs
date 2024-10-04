@@ -1,428 +1,82 @@
 #![allow(non_snake_case)]
 
-use futures_util::stream::StreamExt;
-use std::io::Write;
-
-use chrono::{DateTime, Utc};
 use dioxus::prelude::*;
-use dioxus_fullstack::prelude::*;
-use reqwest::header::{AUTHORIZATION, USER_AGENT};
-use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
-struct User {
-    avatar_url: String,        // https://avatars.githubusercontent.com/u/66571940?v=4
-    organizations_url: String, // https://api.github.com/users/ealmloff/orgs
-    repos_url: String,         // https://api.github.com/users/ealmloff/repos
-    events_url: String,        // https://api.github.com/users/ealmloff/events
-    name: String,              // ealmloff
-    company: Option<String>,   // null
-    blog: Option<String>,      // evanalmloff.me
-    location: Option<String>,  // kansas city
-    twitter_username: Option<String>, // null
-    public_repos: u32,         // 36
-    public_gists: u32,         // 0
-    followers: u32,            // 23
-    following: u32,            // 7
-    created_at: DateTime<Utc>, // 2020-06-07T20:12:47Z
-    updated_at: DateTime<Utc>, // 2023-01-28T13:29:59Z
-}
+use crate::projects::Projects;
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
-struct Repo {
-    full_name: String,
-    name: String,
-    description: Option<String>,
-    fork: bool,
-    archived: bool,
-    stargazers_count: u32,
-    watchers_count: u32,
-    homepage: Option<String>,
-    html_url: String,
-    created_at: DateTime<Utc>,
-    updated_at: DateTime<Utc>,
-    contributors_url: String,
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone)]
-struct RepoData {
-    repo: Repo,
-    prs: Option<SearchResult>,
-    contributor: Contributor,
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone)]
-struct Pr {
-    html_url: String,
-    draft: bool,
-    title: String,
-    state: String,
-    body: Option<String>,
-    created_at: DateTime<Utc>,
-    updated_at: DateTime<Utc>,
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone)]
-struct SearchResult {
-    total_count: u32,
-    incomplete_results: bool,
-    items: Vec<Pr>,
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone)]
-struct Organization {
-    login: String,
-    description: Option<String>,
-    repos_url: String,
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone)]
-struct Contributor {
-    login: String,
-    contributions: u32,
-}
-
-pub fn Home(cx: Scope) -> Element {
-    cx.render(rsx! {
-        div { display: "flex", flex_direction: "row", justify_content: "right",
-            a { margin: "10px", right: "10px", href: "https://www.linkedin.com/in/evan-almloff-571467213/", img { src: "./In-Blue-34.png", width: "32px", height: "32px" } }
-            a { margin: "10px", right: "10px", href: "https://github.com/ealmloff", img { src: "./GitHub-Mark-Light-32px.png", width: "32px", height: "32px" } }
+pub fn Home() -> Element {
+    rsx! {
+        div {
+            display: "flex",
+            flex_direction: "row",
+            justify_content: "right",
+            a {
+                margin: "10px",
+                right: "10px",
+                href: "https://www.linkedin.com/in/evan-almloff-571467213/",
+                img { src: "./In-Blue-34.png", width: "32px", height: "32px" }
+            }
+            a {
+                margin: "10px",
+                right: "10px",
+                href: "https://github.com/ealmloff",
+                img {
+                    src: "./github-mark.png",
+                    width: "32px",
+                    height: "32px",
+                }
+            }
         }
         Body {}
-    })
+    }
 }
 
-fn Body(cx: Scope) -> Element {
-    let repos = use_server_future(cx, (), |_| async move {
-        let client = reqwest::Client::new();
-        let name = "ealmloff";
-        let user: User = client
-            .get(format!("https://api.github.com/users/{name}"))
-            .header(USER_AGENT, "personal-website")
-            .bearer_auth(std::env!("GITHUB_TOKEN"))
-            .send()
-            .await
-            .unwrap()
-            .json()
-            .await
-            .unwrap();
-        let mut orgs: Vec<Organization> = client
-            .get(&user.organizations_url)
-            .header(USER_AGENT, "personal-website")
-            .bearer_auth(std::env!("GITHUB_TOKEN"))
-            .send()
-            .await
-            .unwrap()
-            .json()
-            .await
-            .unwrap();
-        orgs.push(Organization {
-            login: "Floneum".to_string(),
-            description: None,
-            repos_url: "https://api.github.com/orgs/Floneum/repos".to_string(),
-        });
-        let new_repos: Vec<Repo> = client
-            .get(&user.repos_url)
-            .header(USER_AGENT, "personal-website")
-            .bearer_auth(std::env!("GITHUB_TOKEN"))
-            .query(&[("affiliation", "owner,collaborator,organization_member")])
-            .send()
-            .await
-            .unwrap()
-            .json()
-            .await
-            .unwrap();
-        let mut new_repos: Vec<_> = new_repos
-            .into_iter()
-            .filter(|repo| !repo.fork && !repo.archived)
-            .collect();
-        for org in orgs {
-            let orgs_repos: Vec<Repo> = client
-                .get(&org.repos_url)
-                .header(USER_AGENT, "personal-website")
-                .bearer_auth(std::env!("GITHUB_TOKEN"))
-                .query(&[("affiliation", "owner,collaborator,organization_member")])
-                .send()
-                .await
-                .unwrap()
-                .json()
-                .await
-                .unwrap();
-            let orgs_repos: Vec<_> = orgs_repos
-                .into_iter()
-                .filter(|repo| !repo.fork && !repo.archived)
-                .collect();
-            new_repos.extend(orgs_repos);
-        }
-
-        let mut built_repos: Vec<RepoData> = Vec::new();
-
-        for repo in new_repos {
-            let prs = Default::default();
-            let contributors: Vec<Contributor> = client
-                .get(&repo.contributors_url)
-                .header(USER_AGENT, "personal-website")
-                .bearer_auth(std::env!("GITHUB_TOKEN"))
-                .send()
-                .await
-                .unwrap()
-                .json()
-                .await
-                .unwrap();
-            if let Some(contributor) = contributors
-                .into_iter()
-                .find(|contributor| contributor.login.to_lowercase() == name.to_lowercase())
-            {
-                built_repos.push(RepoData {
-                    repo,
-                    prs,
-                    contributor,
-                });
-            }
-        }
-
-        built_repos.sort_by(|a, b| b.repo.stargazers_count.cmp(&a.repo.stargazers_count));
-
-        built_repos
-    })?;
-    let repos = use_ref(cx, || repos.value().clone());
-
-    enum HoveredRepo {
-        None,
-        Hovered(usize),
-        Focused(usize),
+#[component]
+fn Body() -> Element {
+    rsx! {
+        Projects {}
     }
+}
 
-    impl HoveredRepo {
-        fn value(&self) -> Option<usize> {
-            match self {
-                HoveredRepo::None => None,
-                HoveredRepo::Hovered(idx) => Some(*idx),
-                HoveredRepo::Focused(idx) => Some(*idx),
-            }
+#[component]
+fn XIcon() -> Element {
+    rsx! {
+        svg { view_box: "0 0 24 24", "area-hidden": true,
+            path { d: "M13.3174 10.7749L19.1457 4H17.7646L12.7039 9.88256L8.66193 4H4L10.1122 12.8955L4 20H5.38119L10.7254 13.7878L14.994 20H19.656L13.3171 10.7749H13.3174ZM11.4257 12.9738L10.8064 12.0881L5.87886 5.03974H8.00029L11.9769 10.728L12.5962 11.6137L17.7652 19.0075H15.6438L11.4257 12.9742V12.9738Z" }
         }
     }
+}
 
-    let hovered_repo = use_state(cx, || HoveredRepo::None);
-    let repo_request_resolver: &Coroutine<usize> = use_coroutine(cx, {
-        to_owned![repos];
-        |mut rx| async move {
-            let client = reqwest::Client::new();
-            let name = "ealmloff";
-            while let Some(idx) = rx.next().await {
-                if let Some(full_name) = {
-                    let read = repos.read();
-                    read.get(idx).and_then(|repo| {
-                        let repo: &RepoData = repo;
-                        repo.prs.is_none().then(|| repo.repo.full_name.clone())
-                    })
-                } {
-                    let prs = client
-                        .get(format!(
-                            "https://api.github.com/search/issues?q=is:pr+repo:{full_name}+author:{name}"
-                        ))
-                        .header(USER_AGENT, "personal-website")
-                        .bearer_auth(std::env!("GITHUB_TOKEN"))
-                        .send()
-                        .await
-                        .unwrap()
-                        .json()
-                        .await
-                        .unwrap();
-                    let mut write = repos.write();
-                    if let Some(repo) = write.get_mut(idx) {
-                        let repo: &mut RepoData = repo;
-                        repo.prs = Some(prs);
-                    }
-                }
+#[component]
+fn InstagramIcon() -> Element {
+    rsx! {
+        svg { view_box: "0 0 24 24", "area-hidden": true,
+            path {
+                d: "M12 3c-2.444 0-2.75.01-3.71.054-.959.044-1.613.196-2.185.418A4.412 4.412 0 0 0 4.51 4.511c-.5.5-.809 1.002-1.039 1.594-.222.572-.374 1.226-.418 2.184C3.01 9.25 3 9.556 3 12s.01 2.75.054 3.71c.044.959.196 1.613.418 2.185.23.592.538 1.094 1.039 1.595.5.5 1.002.808 1.594 1.038.572.222 1.226.374 2.184.418C9.25 20.99 9.556 21 12 21s2.75-.01 3.71-.054c.959-.044 1.613-.196 2.185-.419a4.412 4.412 0 0 0 1.595-1.038c.5-.5.808-1.002 1.038-1.594.222-.572.374-1.226.418-2.184.044-.96.054-1.267.054-3.711s-.01-2.75-.054-3.71c-.044-.959-.196-1.613-.419-2.185A4.412 4.412 0 0 0 19.49 4.51c-.5-.5-1.002-.809-1.594-1.039-.572-.222-1.226-.374-2.184-.418C14.75 3.01 14.444 3 12 3Zm0 1.622c2.403 0 2.688.009 3.637.052.877.04 1.354.187 1.67.31.421.163.72.358 1.036.673.315.315.51.615.673 1.035.123.317.27.794.31 1.671.043.95.052 1.234.052 3.637s-.009 2.688-.052 3.637c-.04.877-.187 1.354-.31 1.67-.163.421-.358.72-.673 1.036a2.79 2.79 0 0 1-1.035.673c-.317.123-.794.27-1.671.31-.95.043-1.234.052-3.637.052s-2.688-.009-3.637-.052c-.877-.04-1.354-.187-1.67-.31a2.789 2.789 0 0 1-1.036-.673 2.79 2.79 0 0 1-.673-1.035c-.123-.317-.27-.794-.31-1.671-.043-.95-.052-1.234-.052-3.637s.009-2.688.052-3.637c.04-.877.187-1.354.31-1.67.163-.421.358-.72.673-1.036.315-.315.615-.51 1.035-.673.317-.123.794-.27 1.671-.31.95-.043 1.234-.052 3.637-.052Z",
             }
-        }
-    });
-
-    let mut cards: [[Element; 3]; 3] = Default::default();
-    cards[0][0] = render! {
-        Card {
-            h1 { "Hi, I'm Evan!" }
-            h2 {
-                class: "break-words w-11/12",
-                "Here are a few projects I have been working on:"
-            }
-        }
-    };
-
-    let current_hovered = hovered_repo.current().value();
-
-    let repos = repos.read();
-    let mut prs = current_hovered.and_then({
-        |idx| {
-            repos
-                .get(idx)
-                .and_then(|repo| repo.prs.as_ref().map(|prs| prs.items.iter()))
-        }
-    });
-    let mut idx = 0;
-    for row in &mut cards {
-        for card in row {
-            if card.is_none() {
-                if prs.is_none() || current_hovered == Some(idx) {
-                    if let Some(repo) = repos.get(idx) {
-                        let repo = &repo.repo;
-                        *card = render! {
-                            Card {
-                                onhover: move |_| {
-                                    repo_request_resolver.send(idx);
-                                    if let HoveredRepo::None = &*hovered_repo.current() {
-                                        hovered_repo.set(HoveredRepo::Hovered(idx));
-                                    }
-                                },
-                                onfocus: move |_| {
-                                    repo_request_resolver.send(idx);
-                                    hovered_repo.set(HoveredRepo::Focused(idx));
-                                },
-                                onfocusout: move |_| {
-                                    if let HoveredRepo::Focused(cur_idx) = &*hovered_repo.current() {
-                                        if *cur_idx == idx {
-                                            hovered_repo.set(HoveredRepo::None);
-                                        }
-                                    }
-                                },
-                                onhoverout: move |_| {
-                                    if let HoveredRepo::Hovered(cur_idx) = &*hovered_repo.current() {
-                                        if *cur_idx == idx {
-                                            hovered_repo.set(HoveredRepo::None);
-                                        }
-                                    }
-                                },
-                                focusable: true,
-                                a {
-                                    href: "{repo.html_url}",
-                                    class: "text-xl text-blue-600 visited:text-purple-600 capitalize m-4",
-                                    "{repo.name}"
-                                }
-                                repo.description.as_ref().map(|discription| {
-                                    rsx! {
-                                        p {
-                                            class: "break-words w-11/12",
-                                            "{discription}"
-                                        }
-                                    }
-                                })
-                                p { "Stars: {repo.stargazers_count}" }
-                            }
-                        };
-                    }
-                } else if let Some(pr) = prs.as_mut().and_then(|prs| prs.next()) {
-                    *card = render! {
-                        Card {
-                            onfocus: move |_| {
-                                repo_request_resolver.send(idx);
-                                hovered_repo.set(HoveredRepo::Focused(idx));
-                            },
-                            focusable: true,
-                            h1 {
-                                // href: "{pr.html_url}",
-                                // class: "text-blue-600 visited:text-purple-600",
-                                class: "text-xl capitalize m-4",
-                                "{pr.title}"
-                            }
-                            pr.body.as_ref().map(|discription| {
-                                const MAX_LEN: usize = 80;
-                                let discription = if discription.len() > MAX_LEN {
-                                    discription[..(MAX_LEN-3)].to_string()+"..."
-                                } else {
-                                    discription.to_string()
-                                };
-                                rsx! {
-                                    p {
-                                        class: "break-words w-11/12",
-                                        "{discription}"
-                                    }
-                                }
-                            })
-                        }
-                    };
-                }
-                idx += 1;
-            }
+            path { d: "M12 15a3 3 0 1 1 0-6 3 3 0 0 1 0 6Zm0-7.622a4.622 4.622 0 1 0 0 9.244 4.622 4.622 0 0 0 0-9.244Zm5.884-.182a1.08 1.08 0 1 1-2.16 0 1.08 1.08 0 0 1 2.16 0Z" }
         }
     }
+}
 
-    render! {
-        div { class: "flex flex-col justify-center items-center h-full w-full",
-            onmousedown: move |_| {
-                hovered_repo.set(HoveredRepo::None);
-            },
-            table {
-                tbody{
-                    for row in cards {
-                        tr {
-                            for card in row {
-                                td {
-                                    if let Some(card) = card {
-                                        Some(card)
-                                    }
-                                    else if repos.is_empty() {
-                                        render!{
-                                            Card {
-                                                div {
-                                                    class: "w-1/3 h-6 animate-pulse bg-slate-200 dark:bg-slate-700 rounded-lg m-4",
-                                                }
-                                                div {
-                                                    class: "w-4/5 h-4 animate-pulse bg-slate-200 dark:bg-slate-700 rounded-lg m-1",
-                                                }
-                                                div {
-                                                    class: "w-4/5 h-4 animate-pulse bg-slate-200 dark:bg-slate-700 rounded-lg m-1",
-                                                }
-                                                div {
-                                                    class: "w-4/5 h-4 animate-pulse bg-slate-200 dark:bg-slate-700 rounded-lg m-1",
-                                                }
-                                                div {
-                                                    class: "w-4/5 h-4 animate-pulse bg-slate-200 dark:bg-slate-700 rounded-lg m-1",
-                                                }
-                                            }
-                                        }
-                                    }
-                                    else {
-                                        render! {
-                                            Card {}
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
+#[component]
+fn GithubIcon() -> Element {
+    rsx! {
+        svg { view_box: "0 0 24 24", "area-hidden": true,
+            path {
+                fill_rule: "evenodd",
+                clip_rule: "evenodd",
+                d: "M12 2C6.475 2 2 6.588 2 12.253c0 4.537 2.862 8.369 6.838 9.727.5.09.687-.218.687-.487 0-.243-.013-1.05-.013-1.91C7 20.059 6.35 18.957 6.15 18.38c-.113-.295-.6-1.205-1.025-1.448-.35-.192-.85-.667-.013-.68.788-.012 1.35.744 1.538 1.051.9 1.551 2.338 1.116 2.912.846.088-.666.35-1.115.638-1.371-2.225-.256-4.55-1.14-4.55-5.062 0-1.115.387-2.038 1.025-2.756-.1-.256-.45-1.307.1-2.717 0 0 .837-.269 2.75 1.051.8-.23 1.65-.346 2.5-.346.85 0 1.7.115 2.5.346 1.912-1.333 2.75-1.05 2.75-1.05.55 1.409.2 2.46.1 2.716.637.718 1.025 1.628 1.025 2.756 0 3.934-2.337 4.806-4.562 5.062.362.32.675.936.675 1.897 0 1.371-.013 2.473-.013 2.82 0 .268.188.589.688.486a10.039 10.039 0 0 0 4.932-3.74A10.447 10.447 0 0 0 22 12.253C22 6.588 17.525 2 12 2Z",
             }
         }
     }
 }
 
 #[component]
-fn Card<'a>(
-    cx: Scope,
-    children: Element<'a>,
-    onhover: Option<EventHandler<'a>>,
-    onhoverout: Option<EventHandler<'a>>,
-    onfocus: Option<EventHandler<'a>>,
-    onfocusout: Option<EventHandler<'a>>,
-    focusable: Option<bool>,
-) -> Element {
-    cx.render(rsx! {
-        div { class: "flex flex-col justify-center items-center ring-0 hover:ring-4 focus:ring-4 focus:rounded-3xl bg-slate-100 dark:bg-slate-800 hover:bg-blue-100 dark:hover:bg-blue-900 rounded-md hover:rounded-xl shadow-md hover:shadow-lg m-4 transition-all duration-200 text-center w-64 h-64",
-            onmouseenter: move |_| {
-                if let Some(f) = onhover.as_ref() { f.call(()) }
-            },
-            onmouseleave: move |_| {
-                if let Some(f) = onhoverout.as_ref() { f.call(()) }
-            },
-            onfocusin: move |_| {
-                if let Some(f) = onfocus.as_ref() { f.call(()) }
-            },
-            onfocusout: move |_| {
-                if let Some(f) = onfocusout.as_ref() { f.call(()) }
-            },
-            tabindex: focusable.filter(|f| *f).map(|_| 0),
-            children
+fn LinkedInIcon() -> Element {
+    rsx! {
+        svg { view_box: "0 0 24 24", "area-hidden": true,
+            path { d: "M18.335 18.339H15.67v-4.177c0-.996-.02-2.278-1.39-2.278-1.389 0-1.601 1.084-1.601 2.205v4.25h-2.666V9.75h2.56v1.17h.035c.358-.674 1.228-1.387 2.528-1.387 2.7 0 3.2 1.778 3.2 4.091v4.715zM7.003 8.575a1.546 1.546 0 01-1.548-1.549 1.548 1.548 0 111.547 1.549zm1.336 9.764H5.666V9.75H8.34v8.589zM19.67 3H4.329C3.593 3 3 3.58 3 4.297v15.406C3 20.42 3.594 21 4.328 21h15.338C20.4 21 21 20.42 21 19.703V4.297C21 3.58 20.4 3 19.666 3h.003z" }
         }
-    })
+    }
 }

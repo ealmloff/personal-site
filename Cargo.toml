@@ -4,16 +4,8 @@ version = "0.1.0"
 authors = ["Evan Almloff <evanalmloff@gmail.com>"]
 edition = "2021"
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-
 [dependencies]
-# dioxus-web = { git = "https://github.com/dioxuslabs/dioxus" }
-# dioxus = { git = "https://github.com/dioxuslabs/dioxus" }
-
-dioxus = { git = "https://github.com/dioxuslabs/dioxus" }
-dioxus-fullstack = { git = "https://github.com/dioxuslabs/dioxus", features = ["router"] }
-dioxus-router = { git = "https://github.com/dioxuslabs/dioxus" }
-dioxus-web = { version = "0.4", features = ["hydrate"], optional = true }
+dioxus = { git = "https://github.com/dioxuslabs/dioxus", features = ["static-generation", "router"] }
 reqwest = { version = "0.11.14", features = ["json"] }
 serde = { version = "1.0", features = ["derive"] }
 chrono = { version = "0.4.23", features = ["serde"] }
@@ -22,8 +14,8 @@ tokio = { version = "1", features = ["full"], optional = true }
 
 [features]
 default = []
-ssr = ["tokio", "dioxus-fullstack/ssr"]
-web = ["dioxus-web"]
+ssr = ["tokio", "dioxus/axum"]
+web = ["dioxus/web"]
 
 [profile.release]
 opt-level = "z"
