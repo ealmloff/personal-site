@@ -17,7 +17,7 @@ use serde::{Deserialize, Serialize};
 fn main() {
     launch(|| {
         rsx! {
-            head::Link { rel: "stylesheet", href: asset!("./public/output.css") }
+            document::Link { rel: "stylesheet", href: asset!("./public/output.css") }
             Router::<Route> {}
         }
     })

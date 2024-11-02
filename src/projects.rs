@@ -60,7 +60,7 @@ pub fn Projects() -> Element {
                                         }
                                     }
                                 }
-                                a { href: "https://github.com/dioxuslabs/dioxus", class: "text-blue-900 visited:text-purple-900 capitalize",
+                                a { href: "https://github.com/ealmloff/sledgehammer_bindgen", class: "text-blue-900 visited:text-purple-900 capitalize",
                                     "sledgehammer bindgen"
                                 }
                             }
@@ -87,7 +87,7 @@ pub fn Projects() -> Element {
                                         }
                                     }
                                 }
-                                a { href: "https://github.com/dioxuslabs/dioxus", class: "text-blue-900 visited:text-purple-900 capitalize",
+                                a { href: "https://github.com/floneum/floneum", class: "text-blue-900 visited:text-purple-900 capitalize",
                                     "kalosm"
                                 }
                             }
@@ -115,11 +115,11 @@ pub fn Projects() -> Element {
                                     }
                                 }
                                 "The "
-                                a { href: "https://dioxuslabs.com/learn/0.5/guide", class: "text-blue-900 visited:text-purple-900 capitalize",
+                                a { href: "https://floneum.com/kalosm/docs", class: "text-blue-900 visited:text-purple-900 capitalize",
                                     "Kalosm"
                                 }
                                 " and "
-                                a { href: "https://floneum.com/kalosm/docs", class: "text-blue-900 visited:text-purple-900 capitalize",
+                                a { href: "https://dioxuslabs.com/learn/0.5/guide", class: "text-blue-900 visited:text-purple-900 capitalize",
                                     "Dioxus"
                                 }
                                 " books"

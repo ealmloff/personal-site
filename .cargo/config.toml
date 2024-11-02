@@ -5,3 +5,11 @@ inherits = "release"
 
 [profile.dioxus-server]
 inherits = "release"
+
+[profile.dioxus-wasm]
+inherits = "dev"
+opt-level = 2
+
+[profile.dioxus-android]
+inherits = "dev"
+opt-level = 2

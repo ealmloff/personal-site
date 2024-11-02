@@ -14,7 +14,7 @@ tokio = { version = "1", features = ["full"], optional = true }
 
 [features]
 default = []
-ssr = ["tokio", "dioxus/axum"]
+server = ["tokio", "dioxus/axum"]
 web = ["dioxus/web"]
 
 [profile.release]
