@@ -5,7 +5,10 @@ authors = ["Evan Almloff <evanalmloff@gmail.com>"]
 edition = "2021"
 
 [dependencies]
-dioxus = { git = "https://github.com/dioxuslabs/dioxus", features = ["static-generation", "router"] }
+dioxus = { git = "https://github.com/dioxuslabs/dioxus", features = [
+    "fullstack",
+    "router",
+] }
 reqwest = { version = "0.11.14", features = ["json"] }
 serde = { version = "1.0", features = ["derive"] }
 chrono = { version = "0.4.23", features = ["serde"] }
@@ -14,7 +17,7 @@ tokio = { version = "1", features = ["full"], optional = true }
 
 [features]
 default = []
-server = ["tokio", "dioxus/axum"]
+server = ["tokio", "dioxus/server"]
 web = ["dioxus/web"]
 
 [profile.release]

@@ -14,14 +14,14 @@ pub fn Home() -> Element {
                 margin: "10px",
                 right: "10px",
                 href: "https://www.linkedin.com/in/evan-almloff-571467213/",
-                img { src: "./In-Blue-34.png", width: "32px", height: "32px" }
+                img { src: asset!("/public/In-Blue-34.png"), width: "32px", height: "32px" }
             }
             a {
                 margin: "10px",
                 right: "10px",
                 href: "https://github.com/ealmloff",
                 img {
-                    src: "./github-mark.png",
+                    src: asset!("/public/github-mark.png"),
                     width: "32px",
                     height: "32px",
                 }
